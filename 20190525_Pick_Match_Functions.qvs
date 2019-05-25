@@ -1,0 +1,19 @@
+//Approach_1, in loading scripts
+Load *
+	,Pick(WildMatch(Description,'*pri*')+1,'OK','Prioritize') as NewField
+
+Inline
+[
+ID, Description
+1, Need computer fixed ASAP.
+2, Monitor broken - top priority!!
+3, First priority needs to be fixing.
+4, No rush on this, just whenever you have a time.
+5, Not a priority.
+6, Please fix my hard drive.
+7, Spilled coffee on my laptop.
+]
+;
+
+//Approach_2, in UI chart
+//Same results, but Approach_2, User cannot make a selection of NewField

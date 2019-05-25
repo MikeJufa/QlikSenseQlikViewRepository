@@ -1,0 +1,27 @@
+As part of the Qlik Sense product line, there are a few products available for download.  Two of them are Qlik Sense Desktop and Qlik Sense Server.
+
+Qlik Sense desktop is a standalone program that is installed into a Windows workstation,  it gives individuals  the power to create self-service interactive data visualizations and data stories locally from multiple data souces with drag-and-drop simplicity. it fully functional and free for personal and internal business use.  the apps you create with Qlik Sense desktop can be shared as files to other sense desktop users uploaded to the cloud for online analysis and collaboration or imported into the Qilk Sense server environment for online access, added security, governance and scalability.  
+
+Qlik Sense Server provides the same data access app design and storytelling capabilities as desktop but includes additional capabilities that help manage and scale the Qlik Sense environment.
+First, it's entirely browser-based allow you to explore the data and develop apps anywhere including the administration of them, whether you're on a PC, Mac or even mobile devices such as tablets and smartphones.  Second, you can reuse your content, manage security and resources, collaborate and share with other users in a secure, governed, scalable environment.  Qlik Sense service supports deployments of any size from departmental to enterprise.
+
+Let's take a look at some of the design goals of the Qlik Sense server architecture.  Qlik Sense server uses a singular architecture with the latest specifications and technologies, improve deployment scalability, resiliency, resource management governance and integration resulting in an overall efficient and consistent design there is support for geographically dispersed multi node deployments along with the management tools that make it easy to roll out these type of deployments whether on-premise using commodity hardware or within hosted cloud and virtual environments, much thought was given to the well  designed management paradigm which reduces administration efforts including the controlling of tasks, security rules, resources and licenses especially in able to handle larger dispersed deployments.  There is a flexible security rules engine and support for a diverse range of security systems to allow for custom authentication and authorization.  
+
+Let's take a look at the architecture service components that run within the Qlik Sense deployment.  Qlik Sense services are the cornerstones of the latest Qlik Sense architectures and are configured to support a variety of enterprise ready deployment scenarios when installed on several machines they form a collection of nodes and sites that produce a distributed architecture that increase system resiliency reduces maintenance and improves overall deployment flexibility and scalability.
+
+The core component within all Qlik Sense server deployments is the engine built from the same proven data indexing technology that is powered QlikView for years.
+
+The engine is responsible for handling the data and applications processing them in memory and returning analytics results back to the end-user through the client with speed of thought efficiency.  The
+works with a number of files on disk called qvf files.  QVF files contain the data the load script that loads the data and details about what makes up the dashboard user interface that the user is going to see such as, the layout, chart objects, fields expressions, text, etc. 
+
+The Repository is responsible for storing all of the other information about the environment which is stored in internal database, the content includes configuration settings, security rules, licensing data, tasks, bascially the system metadata that  controls and coordinates the environments or environments.
+
+The Scheduler is responsible for scheduling reloads of apps processed by the engine.  If you have certain apps that require data refreshes daily.  The scheduler will follow specific set of rules that you defined it performs as tasks.
+
+The fourth and final component within the Qlik Sense architecture is the Proxy, the Proxy is another modern and powerful piece of the Qlik Sense overall architecture as it handles all communications between the client and the server.  It is not be confused with a web server as it does not store a host content itself.  It integrates a number of components that control and orchestrate security, resilience and load balancing, acting as the gateway or pass through between the users and other architecture components I described earlier. 
+
+Finally, to wrap up this presentation I would like to make mention that all the components that make up the Qlik Sense architecture offer extensive API capabilities.  The API's can automate many of the processes found within the architecture including those perform manually within the management console, even the engine itself has an extensive set of APIs for creating advanced analytics and mashups.
+
+Summary, the Qlik Sense architecture provides the foundation for deploying a secure, scalable and governed self-service data discovery solution that adapts to the way an organization does business providing both the desktop and online experience Qlik Sense allows users to create their own data visualizations, dashboards and reports while giving IT confidence that they're drawing upon consistent secure libraries from a controlled and managed environment.
+
+This concludes the brief introduction to the Qlik Sense architecture.
