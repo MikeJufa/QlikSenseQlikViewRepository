@@ -1,0 +1,14 @@
+//ApplyMap() multiple fields
+Mapping_Table:
+Mapping Load
+   Field1
+  ,Field2&'|'&Field3&'|'&Field4 as Field5
+FROM ...
+
+FACT:
+Load
+   Field1
+  ,Subfield(ApplyMap('Mapping_Table',Field1),'|',1) as Field2
+  ,Subfield(ApplyMap('Mapping_Table',Field1),'|',2) as Field3
+  ,Subfield(ApplyMap('Mapping_Table',Field1),'|',3) as Field4
+  ...
