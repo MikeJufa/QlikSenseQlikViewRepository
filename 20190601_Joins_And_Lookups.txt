@@ -1,0 +1,58 @@
+Introduction
+The Qlik internal logic allows a multi-table data model.  Tables are linked by the naming of the keys so that Qlik knows how to evaluate the relations at run-time.
+
+This is very different from many other BI or query based tools where, when several tables are used, they are all joined together into one table and then the output is used for analysis.  The most obvious example of this difference is a simple SELECT statement.  With it, you can use several tables as input and join them, but the output is always one single, denormalized table.
+
+Completed denormalized.  Everything in one table.
+
+With Qlik, in contrast, youcan have a multi-table relational data model that is evaluated in real-time.  The associations are evaluated as joins at the moment when the user clicks in the application, making a selection.
+
+In most cases it is advantageous to keep many tables in the data model; but sometimes it is better to join them in the script.  This document will try to explain when you should do one or the other.
+
+Normalized.  Each entity type in its own table.
+
+Qlik Tables associations
+The data model defined in the Qlik script usually contains many tables that are linked with key fields.  The links are implicit joins that are not yet made.  In other words, they define where joins should be made when the user makes a selection.  But since they are not yet evaluated, we prefer not to call them "joins".  Instead, we call them "associations".
+
+When the associations are evaluated, they are evaluated as natural joins, i.e. Qlik requires the key field to have the same value in the two tables.  It is hence not possible to use any other comparison, e.g. the following creterion CANNOT be used:
+
+TableA.key >= TableB.key
+
+Further, the Qlik script can contain explicit joins.  These are different and these we indeed call "joins".  These are executed when the script runs and the resulting table will constitute one table in the Qlik data model, unless it is dropped.  See more about these in the next section.
+
+Hence, the main difference between the associations and joins is that the associations are evaluated at demand; and the user makes selections.  As opposed to the joins that are evaluated when the script runs.
+
+A second difference is that a join is explicitly an inner join or an outer join (or a left or right join) whereas the nature of an association depends on the situation.  The association can be evaluated to a left join or a right join depending on where the user has made a selection.  And with no selection, the association is always evaluated to a full outer join.
+
+For example, if you have a table containing customers and a table containing orders, and you select some customers, then Qlik will make a left join: All the selected customer (left table) will be possible, even though they are not represented in the order table.  But only the orders (right table) that are represented in the customer table are possible.
+
+So when you make you data model in the Qlik script, you make the necessary data transformations, sometimes using explicit joins, and you make sure to name the keys so that the resulting tables are linked correctly.  Also, you also make sure to name non-keys with unique names so that these do no link.
+
+Joins in the script
+Sometimes you need to join tables in the script, i.e., you use two or more tables as input, perform the join and get one table as output for the Qlik data model.  It could be that you want to denormalize the data model to improve performance or that you, for some other reason, choose to put fields from two tables into one.
+
+When you join two table, there is always a possibility that the number of records change.  In most case, this is not a problem, it is exactly what you expect.
+
+One example could be that you have a table containing order hearders and one containing order details.  Each header can have several order lines in the order details table.  When these two tables are joined, the resulting table should have the same number of records as the order details table: you have a one-to-many relationship so an order can have several order lines, but an order line cannot belong to several order headers. The only problem you encounter is that you can no longer sum a number that resided in the order header table.
+
+If you join over a many-to-many relationship, the new number of records will possibly be larger than the number of records of any of the constituting tables.
+
+In some cases, you get a change of number of records when you don't expect it and this may cause problems.  I have often seen this in real life and it usuall happens when you join what you think is a one-to-many relationship, when it in fact is a one-to-many relationship.  An example is when you have product attributes is another table than the master product table.  Then one product can potentially have several attributes, and a join may cause Qlik to calculate some number incorrectly. Or rather - Qlik calculates the numbers correctly, but he result is not what you expect.
+
+There are two ways to perform join in the Qlik script.
+
+The external join - the SQL SELECT join
+A join can  be defined inside a SELECT statement, which in the script execution is sent as a string to the connect, usually a relational database management system (RDBMS) using the ODBC or OLE DB connection.  Then Qlik waits for an answer.  In other words: the SQL join is performed on the DB system. This is sometimes more efficient and more robust than if you let Qlik manage it.  This is especially true if you have large tables, then you should make the join inside the SELECT statement.
+
+A join inside a SELECT statement is often versaltile: you can make any tpe of join that the database allows, e.g. also joins that are not natural:
+TableA.key >= TableB.key
+
+One consequence of letting the RDBM system manage the join is that the syntax of the SELECT statement may differ from database to database.  Qlik does not interpret the SELECT statement.  Instead it is evaluated by the RDBMS.
+
+The Qlik join - the Join prefix
+The Join prefix in the Qlik script joins the loaded table with one that has been loaded previously in the script run.  It is performed by Qlik itself.  Just as the associations, Qlik joins are natural join based on that the two key fields are named the same.  If there is no common key, the Cartesian product of the two tables will be generated.
+
+The Qlik join is fast but will need a lot of primary memory.  So if the tables are large, the performance may become poor.  For smaller tables it is however the best alternative.
+
+the Join prefix can be put in fornt of a Load statement or in front of a SQL SELECT statement.  By default, an outer join is made.  But it is also possible to make an inner, left or right join.
+

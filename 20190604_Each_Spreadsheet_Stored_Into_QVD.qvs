@@ -1,0 +1,23 @@
+ODBC CONNECT32 TO [Excel Files;DBQ=C:\User\zf328\Desktop\FOR EACH STORE QVD.xlsx];
+
+LET vTgtPath = 'C:\User\zf328\Desktop\QVD\';
+
+exceltables:
+SQLTABLES;
+DISCONNECT;
+
+FOR i=0 TO NOOFROWS('exceltables')-1
+
+    LET vExcelSheets = purgechar(purgechar(peek('TABLE_NAME', i, 'exceltables'),chr(36)),chr(39));
+
+    NoConcatenate
+
+    LOAD
+        Date,
+        Amount
+    FROM
+        [C:\Users\zf328\Desktop\FOR EACH STORE QVD.xlsx](ooxml, embedded labels, table is [$(vExcelSheets)]);
+
+    STORE [$(vExcelSheets)] INTO $(vTgtPath)$(vExcelSheets).QVD(QVD);
+
+NEXT i

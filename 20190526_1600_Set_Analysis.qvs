@@ -1,0 +1,5 @@
+//Set Analysis: Sales for This Week
+sum({$<Year={$(=Year(Max(Date)))},Week={$(=Week(Max(Date)))}>}Sales)
+
+//Set Analysis: Sales for Last 7 days
+sum({$<Date={"<=$(=Max(Date))>=$(=Max(Date)-7)"}>}Sales)
