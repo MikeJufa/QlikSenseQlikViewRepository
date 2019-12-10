@@ -1,0 +1,165 @@
+//Main
+SET ThousandSep=',';
+SET DecimalSep='.';
+SET MoneyThousandSep=',';
+SET MoneyDecimalSep='.';
+SET MoneyFormat='$#,##0.00;-$#,##0.00';
+SET TimeFormat='h:mm:ss TT';
+SET DateFormat='M/D/YYYY';
+SET TimestampFormat='M/D/YYYY h:mm:ss[.fff] TT';
+SET FirstWeekDay=6;
+SET BrokenWeeks=1;
+SET ReferenceDay=0;
+SET FirstMonthOfYear=1;
+SET CollationLocale='en-US';
+SET CreateSearchIndexOnReload=1;
+SET MonthNames='Jan;Feb;Mar;Apr;May;Jun;Jul;Aug;Sep;Oct;Nov;Dec';
+SET LongMonthNames='January;February;March;April;May;June;July;August;September;October;November;December';
+SET DayNames='Mon;Tue;Wed;Thu;Fri;Sat;Sun';
+SET LongDayNames='Monday;Tuesday;Wednesday;Thursday;Friday;Saturday;Sunday';
+
+////////////////////////////////////////////////////////////////////
+//	Author - Aaron Couron
+//	http://livingqlik.com
+//	10/24/2018
+//
+//	the author grants free use of this app but claims no liability
+//	or responsibility for any negative effects you might
+//	encounter using it within any Qlik Sense environment.
+///////////////////////////////////////////////////////////////////
+
+///////////////////////////////////////////////////////////////////
+//	PREREQUISITES:
+//	This app requires the (free) SMTP Web Connector within the
+//		Qlik QlikWebConnectors package found at the Qlik software download page.
+//	This app utilizes the ServerLogsFolder which will require developer to have access
+//		to this built in connection.
+//	The Qlik Server will need to be put into Legacy mode because the data sources
+//		require dynamic URLs.
+///////////////////////////////////////////////////////////////////
+
+//Config Variables
+//	Set Log Location
+//	Usually will be 'C:\QlikShare\ArchivedLogs\<server name>\Script'
+set vFileLocation	=	'C:\ProgramData\Qlik\Sense\Log\Scheduler\System';
+
+//	Set here how many minutes ago you want to scoop logs for
+//	This should coincide with the frequency in minutes of the reload task for this app.
+set vMinutesToGoBack	=	5;
+
+//	email settings:
+set vRecipient	=	'administrator@company.com';
+set vQwcConnectionName = 'lib://SMTP Connector (domain_userid)';
+set vMailServer	=	'smtp_host_server';
+set vPort	=	25;
+set vSSLMode	=	'None';
+set vSubject	=	'Error found in Qlik Sense Server Task';
+set vMessage	= 	'Reload task errors have been encountered within the last $(vMinutesToGoBack) minutes on the Qlik Sense Server. Log in to the <a href="https://con-qssrv.calprocorp.local/qmc/tasks">QMC</a> to review the tasks and associated log entries.';
+set vFromName	=	'Qlik Sense Admin';set	vFromEmail	=	'qs_admin@company.com';
+
+//Script log
+///////////////////////////////////////////////////////////////
+//	Do not adjust past this line
+///////////////////////////////////////////////////////////////
+
+//	create a dummy table in case there are no errors.
+Script_Log:
+load * inline [
+ObjectId
+];
+
+let vDecimalTime	=	$(vMinutesToGoBack)/1440;
+let vLogStart	=	num(now()) - $(vDecimalTime);
+
+for each vFile in FileList('$(vFileLocation)\*.txt')
+
+concatenate(Script_Log)
+//load if(wildmatch(Text_Log,'Error:*'),1,0) as Err0r_Flag,*;
+LOAD '$(vFile)' as File,
+	ObjectId & Timestamp as id,
+    Sequence#,
+    "ProductVersion",
+    (num(floor(Timestamp)) +
+    	((mid(Timestamp,10,2)*60) +
+    	mid(Timestamp,12,2) +
+    	(mid(Timestamp,14,2)/100) )
+     	/1440) as TimestampNum,
+    Timestamp,
+    Severity,
+    Hostname,
+    Id,
+    Description,
+    ProxySessionId,
+    ProxyPackageId,
+    RequestSequenceId,
+    UserDirectory,
+    "UserId",
+    ObjectId,
+    ObjectName,
+    "Service",
+    Origin,
+    Context,
+    Command,
+    Result,
+    Message,
+    Id2
+from [$(vFile)]
+(txt, utf8, embedded labels, delimiter is '\t', msq)
+where wildmatch(Severity,'ERROR')
+	and Result = 65
+    and not wildmatch(Message,'*skipped*')
+	and (num(floor(Timestamp)) +
+    	((mid(Timestamp,10,2)*60) +
+    	mid(Timestamp,12,2) +
+    	(mid(Timestamp,14,2)/100) )
+     	/1440) > $(vLogStart);
+
+next vFile;
+
+//exit script;
+
+
+//Errors?
+Err0r:
+load count(ObjectId) as Err0rCount
+resident Script_Log;
+
+Let vErr0r	=	if(isnull(peek('Err0rCount',0,'Err0r'))
+					,0
+                    ,peek('Err0rCount',0,'Err0r'));
+trace vErr0r	=	$(vErr0r);
+
+drop table Err0r;
+
+//Email Notify
+if $(vErr0r)>0 then
+
+//	some url encoding to eliminate spaces and @
+let vRecipient 	= 	replace('$(vRecipient)','@','%40');
+let vSubject	=	replace('$(vSubject)',' ','+');
+let vFromName	=	replace('$(vFromName)',' ','+');
+let	vFromEmail	=	replace('$(vFromEmail)','@','%40');
+
+let vMessage	= 	'The reload of app ' & peek('ObjectName',-1,'Script_Log') & ' has failed with errors within the last $(vMinutesToGoBack) minutes on the Qlik Sense Server. Log in to the <a href="https://con-qssrv.calprocorp.local/qmc/tasks">QMC</a> to review the tasks and associated log entries.';
+let vMessage	=	replace('$(vMessage)',' ','+');
+
+SMTPConnector_SendEmail:
+LOAD
+    status as SendEmail_status,
+    result as SendEmail_result,
+    filesattached as SendEmail_filesattached
+FROM [$(vQwcConnectionName)]
+(URL IS [http://localhost:5555/data?connectorID=SMTPConnector&table=SendEmail&SMTPServer=$(vMailServer)&Port=$(vPort)&SSLmode=$(vSSLMode)&to=$(vRecipient)&subject=$(vSubject)&message=$(vMessage)&html=True&fromName=$(vFromName)&fromEmail=$(vFromEmail)&delayInSeconds=0&appID=], qvx);
+
+trace email sent;
+trace url = 'http://localhost:5555/data?connectorID=SMTPConnector&table=SendEmail&SMTPServer=$(vMailServer)&Port=$(vPort)&SSLmode=$(vSSLMode)&to=$(vRecipient)&subject=$(vSubject)&message=$(vMessage)&html=True&fromName=$(vFromName)&fromEmail=$(vFromEmail)&delayInSeconds=0&appID=';
+
+// IMPORTANT: If, when loading the above script, you receive a 'Script Error' Dialog box with a 'Field Not Found'
+// (or other) error, the first thing you should do is copy and paste the full request URL (i.e. the URL between the square [...]
+// brackets IN THE QLIKVIEW / QLIK SENSE SCRIPT ERROR DIALOG) into a browser address bar and check the response.
+
+else
+
+trace	No errors found - Not sending email;
+
+end if;
