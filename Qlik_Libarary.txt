@@ -1,0 +1,1250 @@
+Num( Number, '000000' ) as Number // Always with at least 6 digits. Leading zeros!
+Num( Number, '(R36)' ) as Number // Displayed in Radix 36 (like hex, but with 36 symbols)
+Num( Number, '(ROM)' ) as Number // Upper case Roman numerals
+
+Num#( Number, '0,0', ',' , '.' ) as Num // Number with decimal comma and point as separator
+
+Date( MonthStart( date ), 'YYYY MMM' ) as YearMonth
+
+Time( Ceil( Time, 1/24/4 ), 'hh:mm' ) as Time // Time rounded downwards to nearest 15 min
+
+Month(Date) as Month //Cyclic
+MonthName(Date) as YearMonth //Sequential
+Date(MonthStart(Date),'YYYY-MM') as YearMonth_Alt2 //Sequential
+
+Quarters:
+Dual('Q'&Ceil(Month(Date)/3), Ceil(Month(Month(Date)/3)) as Quarter //Cyclic
+QuarterName(Date) as YearQuarter //Sequential
+
+Weeks:
+Week(Date) as WeekNumber //Cyclic
+Dual(WeekYear(Date)&'-W'&Week(Date),WeekStart(Date)) as YearWeek //Sequential
+
+Hours:
+Hour(Date) as Hour //Cyclic
+Timestamp(Round(Date,1/24),'MMM DD, hh:mm') as DateHour //Sequential
+
+Dual(Month(Date),MonthStart(Date)) as SeqMonth
+Dual('W'&Week(Date),WeekStart(Date)) as SeqWeek
+Dual('Q'&Ceil(Month(Date)/3),QuarterStart(Date)) as SeqQuarter
+
+LET vToday = Num(Today());
+... WHERE Date = $(vToday);
+
+Date(Floor(Timestamp)) as Date,
+Time(Floor(Frac(Timestamp),1/24/60)) as Time,
+
+
+//NextWorkingDay
+HolidayTab:
+load *, num(Holidate) as NumHolidate
+Inline [Holidate, HolidayName
+07/04/2012, Indepence day
+09/03/2012, labor day
+12/25/2012, X'mas
+]
+;
+
+CalendarTmp:
+LOAD
+	Date,
+	FlgNotWorkingDay,
+	Date(if(peek(FlgNotWorkingDay), peek(NextWorkingDay), peek(Date))) as NextWorkingDay
+;
+LOAD
+	Date,
+	(FlgHoliday or FlgSunday) as FlgNotWorkingDay
+;
+LOAD
+	Date,
+	Exists('Holidate',Date) as FlgHoliday,
+	(WeekDay(Date) = 6) as FlgSunday
+;
+LOAD
+	Date(Today()+30-Recno()+1) as Date
+AUTOGENERATE Today()+30 - MakeDate(2012, 7, 1)+1
+;
+
+/*************************************************************************/
+=Sum({<[Subledger Close Balance Date] = {">=$(=Date([Subledger Close Balance Date]-17)<=$(=Date([Subledger Close Balance Date]-1)"} >}[Subledger Open Balance])
+
+=Sum(aggr(Sum([Subledger Open Balance]),[Subledger Close Balance Date],[Subledger Number]))
+
+=Date(Today()-17)
+=Date(Today()-1)
+
+Sum({<[Subledger Close Balance Date] = {">=2019.06.03<=2019.06.19"} >}[Subledger Open Balance])
+
+Sum({<[Subledger Close Balance Date] = {">=$(=Date(Today()-17))<=$(=Date(Today()-1))"} >}[Subledger Open Balance])
+
+
+/*************Variables With Parameters In Qlik Load Scripts*************/
+LET vSourceDateFormat = 'YYYY-MM-DD';
+LET vTargetDateFormat = 'DD MMM YYYY';
+SET vFormatDateFromSourceToTarget = Date(Date#($1,'$(vSourceDateFormat)'),'$(vTargetDateFormat)');
+
+LOAD
+	$(vFormatDateFromSourceToTarget(StartDate)) as [Start Date],
+	$(vFormatDateFromSourceToTarget(EndDate)) as [End Date],
+	$(vFormatDateFromSourceToTarget(UpdatedDate)) as [Updated Date],
+	...
+
+
+SET vSetNull = if($1 = '', null(), '$1');
+
+LOAD
+	$(vSetNull(SomeField)) as [Some Field],
+	...
+
+
+/**********************Excluding Bank Holidays From NetworkDays*************************/
+Temp_PublicHols:
+LOAD
+    [Public Holiday Date]
+FROM [$(vSourceData)\MyApp-Lookups.xlsx]
+(ooxml, embedded labels, table is [Public Holidays]);
+
+let vPubHols = '';
+
+for iHol = 0 to NoOfRows('Temp_PublicHols') - 1;
+    let vPubHols = vPubHols &
+            if(vPubHols = '', '', ',') & chr(39) &
+            Date(peek('Public Holiday Date', iHol, 'Temp_PublicHols')) & chr(39);
+next
+
+set vWorkDays		= (RangeMax(NetworkDays($1, $2, $(vPubHols))-1,0));
+
+DROP TABLE Temp_PublicHols;
+
+(RangeMax(NetworkDays($1, $2, '28/12/2015','25/12/2015','31/08/2015','25/05/2015',
+'04/05/2015','06/04/2015','03/04/2015','01/01/2015','02/05/2016','28/03/2016',
+'25/03/2016','01/01/2016','30/05/2016','29/08/2016','26/12/2016','27/12/2016',
+'02/01/2017','14/04/2017','17/04/2017','01/05/2017','29/05/2017','28/08/2017',
+'25/12/2017','26/12/2017')-1,0))
+
+LOAD
+    $(vFmtDate(FromDate))		as [From Date],
+    $(vFmtDate(ToDate))			as [To Date],
+    $(vWorkDays(FromDate,ToDate))	as [Number Of Working Days],
+...
+
+=$(vWorkDays(min(FromDate),max(ToDate)))
+
+//https://www.quickintelligence.co.uk/variables-parameters-load-script/
+
+
+SET vScaleNumber = dual(if($1>=1E9 or $1<=-1E9, num($1/1E9, '$#,##0.0 B'),
+							if($1>=1E6 or $1<=-1E6, num($1/1E6, '$#,##0.0 M'),
+								if($1>=1E3 or $1<=-1E3, num($1/1E3, '$#,##0.0 K'),
+									if($1<1E3 or $1>-1E3, num($1,'$#,##0.0'))))),$1);
+
+/****************FOR-NEXT LOOP****************/
+For each vFileName in Filelist('C:\Path\*.txt')
+	Load *, '$(vFileName)' as FileName
+	From [$(vFileName)];
+Next vFileName
+
+For vFileNo = 1 to NoOfRows('FileListTable')
+	Let vFileName = Peek('FileName',vFileNo-1,'FileListTable')
+	Load *, '$(vFileName)' as FileName
+	From [$(vFileName)];
+Next vFileNo
+
+Date:
+Load
+	IntervalID,
+	Date(FromDate + IterNo() -1) as Date,
+	Resident Interals
+	While IterNo() <= ToDate - FromDate +1;
+
+
+/*subfield() function is, when its third parameter is omitted, an implicit loop;*/
+[Individual Skills]:
+Load
+	[Employee No],
+	SubField(Skills, ',') as Skill
+Resident Employees;
+
+
+/*For case show something completely different in the total line, using the Dimensionality() function, that returns 0, 1, 2,...*/
+If(Dimensionality()=0, <Total line expression>, <Individual line expression>)
+
+/*To show the sum of the individual rows*/
+Sum(Aggr(<Original expression>,<Dimension>))
+
+
+SUB ShowTraceStament(typ, statement)
+
+    IF '$(typ)' = 'string' THEN
+        LET vTrace = '$(statement)';
+    ELSE
+        LET vTrace = $(statement);
+    END IF
+
+    TRACE $(vTrace);
+
+END SUB
+
+CALL ShowTraceStament('string', 'hallo welt')
+CALL ShowTraceStament('numeric', 'weekday(today())')
+
+/*
+SET ErrorMode = 0; //will ignore the failure and continue script execution.
+SET ErrorMode = 1; (Default setting) //will halt the script execution when an error is encountered and prompt user for action.
+SET ErrorMode = 2; //will display an "Execution of script failed..." error message immediately on failure, without prompting the user for action.
+*/
+
+
+/*
+One use-case is if you want to load a large number of similar files:
+Then you would need a For – Next loop that loops over the files and
+concatenates them into one table. This is easy if all files have identical set of fields.
+But what if the files have slightly different sets of fields? Then the auto-concatenate
+will not work, so you will need to use the Concatenate prefix. But you must not use
+this on the first iteration, only on the second and subsequent iterations.
+*/
+SET vConcatenate =;
+
+FOR EACH vFile in FileList('.\*.txt')
+
+	Data:
+	$(vConcatenate)
+	LOAD * FROM [$(vFile)];
+	SET vConcatenate ='Concatenate';
+
+NEXT vFile
+
+
+Set vClearCalendar = "='[' & Concat({1<$Table={'Calendar'}>} $Field, ']=,[') & ']=' ";
+
+Sum({$<$(vClearCalendar)>}Amount)
+
+//Sum({$<[Date]=,[Day]=,[Month]=,[Week]=,[Year]=>}Amount)
+
+
+
+//Scoping Selections with AGGR()
+Example of narrow selection:
+=Customer&' -- '&Country //Calculated Dimension
+//To limit the selection to Customer, add an Aggr() function to the expression.
+=Aggr(Customer&' -- '&Country, Customer)
+=Aggr(Only({1<Customer={"*"}>} Customer&' -- '&Country), Customer)
+
+Example of narrow selection:
+//Calculated Dimension
+=SalesPerson&chr(10)&'Report to '[Sales Manager]&chr(10)&'Hire Date '&Date(HireDate,'YYYY-MMM-DD')
+=Aggr(SalesPerson&chr(10)&'Report to '[Sales Manager]&chr(10)&'Hire Date '&Date(HireDate,'YYYY-MMM-DD'), SalesPerson)
+
+Example of widen selection:
+=Aggr(Only({1}Customer), Customer, Country, SalesPerson, Year)
+
+Example of backdoor associative search:
+=Aggr(Only({1}Customer), OrderID)
+=Aggr(Only({1}Bookmark), Bookmark, OrderID)
+=Aggr(Only({1<OrderID={"=sum({1}OrderAmount)>50000"}>}Customer), Customer)
+
+//Colors in Charts
+Mapping Load ProductionID, RGB(Red, Green, Blue) as ProductColor From ProductColors;
+
+/******************MasterCalendarSub***************************/
+SUB CalendarFromField(_field, _calendar, _prefix)
+  [$(_calendar)]:
+  //Generate Final Calendar
+  Load
+       [$(_field)]
+      ,Year([$(_field)]) as [$(_prefix)Year]
+      ,'Q'&Ceil(Month([$(_field)])/3) as [$(_prefix)Quarter]
+      ,Month([$(_field)]) as [$(_prefix)Month]
+      ,Date(MonthStart([$(_field)]),'MMM-YY') as [$(_prefix)YearMonth]
+      ,Date(MonthStart([$(_field)]),'YYYYMM') as [$(_prefix)YearMonthNum]
+      ,Week([$(_field)]) as [$(_prefix)Week]
+      ,WeekDay([$(_field)]) as [$(_prefix)WeekDay]
+      ,Day([$(_field)]) as [$(_prefix)Day]
+      ,WeekStart([$(_field)]) as [$(_prefix)WeekOf]
+      ,if(DayNumberOfYear([$(_field)])<=DayNumberOfYear(Today()), 1, 0) as [$(_prefix)IsInYTD]
+      ,if(Day([$(_field)])<=Day(Today()), 1, 0) as [$(_prefix)IsInMTD]
+  ;
+  //Generate a range of dates between min and max dates.
+  Load
+       Date(DateMin + IterNo()) as [$(_field)]                       //Link Field
+  While DateMin + IterNo() <= DateMax
+  ;
+  //Find min and max of date of field values.
+  Load
+       Min(datefield)-1 as DateMin
+      ,Max(datefield) as DateMax
+  ;
+  //Load date field values.
+  Load
+       FieldValue('$(_field)', RecNo()) as datefield
+  AutoGenerate FieldValueCount('$(_field)')
+  ;
+
+END SUB
+
+/******************MasterCalendarSub***************************/
+
+/******************dataManagementTables***************************/
+SET dataManagerTables = '','Export Worksheet';
+//This block renames script tables from non generated section which conflict with the names of managed tables
+
+FOR EACH name in $(dataManagerTables)
+    LET index = 0;
+    LET currentName = name;
+    LET tableNumber = TableNumber(name);
+    LET matches = 0;
+    DO WHILE NOT ISNULL(tableNumber) OR (index > 0 AND matches > 0)
+        index = index + 1;
+        currentName = name & '-' & index;
+        tableNumber = TableNumber(currentName)
+        matches = MATCH('$(currentName)', $(dataManagerTables));
+    LOOP
+    IF index > 0 THEN
+            RENAME TABLE '$(name)' TO '$(currentName)';
+    ENDIF
+	;
+NEXT
+;
+SET dataManagerTables = ;
+
+/******************dataManagementTables***************************/
+
+
+/******************Configuration the different environments***************************/
+//Configuration script for the different environments
+//Mike Zhu April 2019
+//Set Environment to 'DEV' or 'QA' or 'PRE-PROD' or 'PROD'
+
+IF ComputerName() = 'J-WAQLIK1' THEN
+	vEnvironment = 'DEV';
+ELSEIF ComputerName() = 'J-WAQLIKQA1' THEN
+	vEnvironment = 'QA';
+ELSEIF ComputerName() = 'J-WAQLIKPP2' THEN
+	vEnvironment = 'PRE-PROD';
+ELSEIF ComputerName() = 'WAQLIK2' THEN
+	vEnvironment = 'PROD';
+ELSE
+	EXIT Script
+	;
+END IF
+
+/******************Configuration the different environments***************************/
+
+
+/*********************************************/
+Set dataManagerTables = '','Exp Worksheet';
+
+For each name in $(dataManagerTables)
+    Let index = 0;
+    Let currentName = name;
+    Let tableNumber = TableNumber(name);
+    Let matches = 0;
+    Do while not IsNull(tableNumber) or (index > 0 and matches > 0)
+        index = index + 1;
+        currentName = name & '-' & index;
+        tableNumber = TableNumber(currentName)
+        matches = Match('$(currentName)', $(dataManagerTables));
+    Loop
+    If index > 0 then
+            Rename Table '$(name)' to '$(currentName)';
+    EndIf;
+Next;
+Set dataManagerTables = ;
+
+//External Configuration script
+//Mike Zhu Jan. 2019
+//$(include=config.qvs);
+//Set Environment to 'DEV' or 'QA' or 'PROD'
+
+SET vEnvironment='DEV';
+
+//Set Environment specific variables
+SWITCH vEnvironment
+CASE 'LOCAL'
+SET vSource_Env = 'dev';
+CASE 'DEV'
+SET vSource_Env = 'dev';
+CASE 'QA'
+SET vSource_Env = 'qa';
+CASE 'PROD'
+SET vSource_Env = 'prod';
+DEFAULT
+EXIT Script;
+END Switch
+
+TRACE;
+TRACE Loading Select Time Periods Inline Table;
+TRACE ========================================;
+
+SelectTimePeriod:
+LOAD * Inline
+[
+StartDate; StopDate; Select Time Period
+num(floor(today()-6)); num(floor(today())); Rolling 7d
+num(floor(today()-13)); num(floor(today())); Rolling 14d
+num(floor(MonthStart(today()))); num(floor(MonthEnd(today()))); Current Month
+num(floor(MonthStart(addmonths(today(),-1)))); num(floor(MonthEnd(addmonths(today(),-1)))); Previous Month
+num(floor(yearstart(today()))); num(floor(today())); Current YTD
+](delimiter is ';')
+;
+
+RecentDays:
+Load * Inline
+[
+RecentDays, SelectDays
+7, Last 7 Days
+]
+;
+
+
+
+
+TRACE;
+TRACE Subroutine to Generate Calendar;
+TRACE ===============================;
+//==============================================================================
+// Subroutine to Generate Calendar
+//==============================================================================
+
+SUB CalendarFromField(_field, _calendar, _prefix)
+[$(_calendar)]:
+//Generate Final Calendar
+Load
+	 [$(_field)]
+    ,Year([$(_field)]) as [$(_prefix)Year]
+    ,'Q'&Ceil(Month([$(_field)])/3) as [$(_prefix)Quarter]
+    ,Month([$(_field)]) as [$(_prefix)Month]
+    ,Date(MonthStart([$(_field)]),'MMM-YY') as [$(_prefix)YearMonth]
+    ,Date(MonthStart([$(_field)]),'YYYYMM') as [$(_prefix)YearMonthNum]
+    ,Week([$(_field)]) as [$(_prefix)Week]
+    ,WeekDay([$(_field)]) as [$(_prefix)WeekDay]
+    ,Day([$(_field)]) as [$(_prefix)Day]
+    ,WeekStart([$(_field)]) as [$(_prefix)WeekOf]
+    ,if(DayNumberOfYear([$(_field)])<=DayNumberOfYear(Today()), 1, 0) as [$(_prefix)IsInYTD]
+    ,if(Day([$(_field)])<=Day(Today()), 1, 0) as [$(_prefix)IsInMTD]
+;
+//Generate a range of dates between min and max dates.
+Load
+     Date(DateMin + IterNo()) as [$(_field)]                       //Link Field
+While DateMin + IterNo() <= DateMax
+;
+//Find min and max of date of field values.
+Load
+     Min(datefield)-1 as DateMin
+    ,Max(datefield) as DateMax
+;
+//Load date field values.
+Load
+     FieldValue('$(_field)', RecNo()) as datefield
+AutoGenerate FieldValueCount('$(_field)');
+
+END SUB
+
+
+
+TRACE;
+TRACE AutoGenerate Sales and Dates Table;
+TRACE ==================================;
+
+LET vNumMin = 1;
+LET vNumMax = 10000;
+
+SampleTable:
+LOAD
+	 *
+    ,Year(Field_Date) as Field_Year
+    ,QuarterName(Field_Date) as Field_QuarterName
+    ,Month(Field_Date) as Field_Month
+    ,Week(Field_Date) as Field_Week
+    ,Date(MonthStart(Field_Date),'MMM-YY') as Field_YearMonth
+;
+LOAD
+	 *
+	,Date(Field7) as Field_Date
+    ,Date(Field7,'MMM-DD-YYYY') as Field_Date2
+;
+LOAD
+	 $(vNumMin)+IterNo()-1 as Field1
+    ,num(Rand()*10,'#,##0.00') as Field2
+    ,num(Rand()*100,'#,##0.00') as Field3
+    ,num(Rand()*1000,'#,##0.00') as Field4
+    ,num(Rand()*10000,'#,##0.00') as Field5
+    ,Today()-Floor(Rand()*365*5) as Field7
+AutoGenerate 1
+While $(vNumMin)+IterNo()-1 <= $(vNumMax)
+;
+
+
+Map_FieldName:
+Mapping Load * Inline
+[
+OldName, NewName
+Field1, RowNumber
+Field2, Material_Cost
+Field3, Labour_Cost
+Field4, Sales_UnitPrice
+Field5, Sales_Amount
+Field7, RawDateNum
+]
+;
+
+Rename Fields using Map_FieldName;
+
+
+//CALL CalendarFromField(Field_Date2, FieldCalendar, FD);
+
+
+SUB ShowTraceStament(typ, statement)
+
+    IF '$(typ)' = 'string' THEN
+        LET vTrace = '$(statement)';
+    ELSE
+        LET vTrace = $(statement);
+    END IF
+
+    TRACE $(vTrace);
+
+END SUB
+
+CALL ShowTraceStament('string', 'hallo welt')
+CALL ShowTraceStament('numeric', 'weekday(today())')
+/*********************************************/
+
+/********************Year-Over-Year Comparisons*************************/
+If(DayNumberOfYear(Date) <= DayNumberOfYear(Today()), 1, 0) as IsInYTD,
+If(DayNumberOfQuarter(Date) <= DayNumberOfQuarter(Today()), 1, 0) as IsInQTD,
+If(Day(Date) <= Day(Today()), 1, 0) as IsInMTD,
+If(Month(Date) = Month(Today()), 1, 0) as IsCurrentMonth,
+If(Month(AddMonths(Date,1)) = Month(Today()), 1, 0) as IsLastMonth,
+
+Sum({$<IsInYTD={1}>} Amount)
+Sum({$<Year=,Month=,DayInYear={"<=$(=Max(DayInYear))"}>} Value)
+
+if(InYearToDate(Date, $(vCurrentDate), 0), 1, 0)
+if(InYearToDate(Date, $(vCurrentDate), -1), 1, 0)
+if(InQuarterToDate(Date, $(vCurrentDate), 0), 1, 0)
+if(InQuarterToDate(Date, $(vCurrentDate), -1), 1, 0)
+
+
+/********************Year-Over-Year Comparisons*************************/
+
+/********************As-Of Calendar*************************/
+Date(MonthStart(FieldDate), 'YYYY MMM') as Month,
+
+//Then add the following lines at the end of the script:
+//=========Create a list of distinct Months=========
+tmpAsOfCalendar:
+Load distinct Month
+Resident [Master Calendar];
+//=========Cartesian product with itself=========
+Join(tmpAsOfCalenar)
+Load Month as AsOfMonth
+Resident tmpAsOfCalendar;
+//=========Reload, filter and calculate additional fields=========
+[As-Of Calendar]:
+Load
+	Month,
+	AsOfMonth,
+	Round((AsOfMonth - Month)*/365.2425) as MonthDiff,
+	Year(AsOfMonth) - Year(Month) as YearDiff,
+Resident tmpAsOfCalendar
+Where AsOfMonth >= Month
+;
+
+Drop Table tmpAsOfCalendar;
+
+//will get a yearly accumulation - year-to-date up until the day of the script run.
+Sum({$<YearDiff={0}>}Sales)
+
+//will get a 6-month rolling average
+Sum({$<MonthDiff={"<6"}>} Sales) / Count(distinct {$<MonthDiff={"<6"}>} Month)
+
+//will get the real, non-accumulated numbers.
+Sum({$<MonthDiff={0}>}Sales)
+
+If(MonthDiff=0, 1, 0) as IsSameMonth,
+If(YearDiff=0, 1, 0) as IsSameYear,
+If(MonthDiff<6, 1, 0) as IsRolling6Month,
+
+/********************As-Of Calendar*************************/
+
+/********************Buckets*************************/
+If(ShippedDate - RequiredDate <= -5, Dual('Too early', -5),
+	if(ShippedDate - RequiredDate <= 0, Dual('Just in time', 0),
+		if(ShippedDate - RequiredDate <= 5, Dual('Small delay', 5),
+			Dual('Large delay', 10)))) as Delay,
+
+Round(ShippedDate - RequiredDate, 5) as Delay,
+Class(ShippedDate - RequiredDate, 5) as Delay,
+
+
+DelayClasses:
+Load Lower, Upper, Delay Inline
+[
+Lower, Upper, Delay
+-E99, -5, Too early
+-4, 0, Just in time
+1, 5, Small delay
+6, E99, Large delay
+]
+;
+IntervalMatch(DelayInDays)
+Load Lower, Upper Resident DelayClasses;
+
+//to measure how may percent of the deliveries that were on time, classified into percent intervals.
+ShippedDate - RequiredDate as DelayInDays,
+
+//Calculated Dimensions
+=AGGR(Num(Round(Count(If(DelayInDays<=0, ShipmentID))/Count(ShipmentID),0.1),'0%'),Supplier)
+
+//Rank the suppliers and bucket them in quartiles
+=Aggr(Pick(Ceil(4*Rank(Count(If(DelayInDays<=0, ShipmentID),4)/Count(distinct total Supplier)),'1st quartile','2nd quartile','3rd quartile','Bottom quartile'), Supplier)
+
+/********************Buckets*************************/
+
+/********************Dimensionality()*************************/
+if(Dimensionality()=0, <Total line expression>, <Individual line expression>)
+
+Sum(Aggr(<Original expression>, <Dimension>))
+
+/********************Dimensionality()*************************/
+
+/*******************Use Aggregation Function*************************/
+Sum(If(OrderDate >= vReferenceDate, Amount))
+
+/*******************Use Aggregation Function*************************/
+
+/*******************Nice songs*************************/
+Sunflower (Spider-Man: Into the Spider-Verse) by Post Malone & Swae Lee
+Jesus Walks by Kanye West
+Taset (feat. Offset) by Tyga
+
+/*******************Nice songs*************************/
+
+/*******************Fiscal Year and Month*************************/
+SET vFM = 4;	//First month of fiscal year
+SET vFD = 3;	//First day of the week (0=Mon, 1=Tue, 2=Wed... 6=Sun)
+
+Calendar:
+Load distinct
+	  *
+	, Dual(fYear - 1&'/'&fYear, fYear) as [Fiscal Year]	//Dual fiscal year
+	, Dual(Month, fMonth) as [Fiscal Month]				//Dual fiscal month
+	, Dual('Q'&Ceil(fMonth/3), Ceil(fMonth/3)) as [Fiscal Quarter]
+	, Ceil((FieldDate - StartOfFWeekOne+1)/7) as [Fiscal Week No]
+;
+Load
+	  *
+	, Year + If(Month >= $(vFM), 1, 0) as fYear			//Numeric fiscal year
+//	, Year + If(Month >= $(vFM), 0, -1) as fYear		//Numeric fiscal month
+	, Mod(Month - $(vFM), 12) + 1 as fMonth
+	, Dual('Q'&Ceil(Month/3), Ceil(Month/3)) as Quarter
+	, WeekStart(FYearStart, 0, $(vFD)) as StartOfFWeekOne
+;
+Load
+	  [FieldDate]
+	, Year(FieldDate) as Year	//Standard Master Calendar Year
+	, Month(FieldDate) as Month	//Standard Master Calendar Month
+	, YearStart(FieldDate, 0, $(vFM)) as FYearStart
+	, Date(MonthStart(FieldDate), 'MMM-YYYY') as MonthYear
+	, Week(FieldDate) as ISOWeekNo
+	, Dual(WeekDay(FieldDate), Mod(WeekDay(FieldDate - $(vFD)), 7) + 1) as WeekDay
+	, Day(FieldDate) as Day
+	, Date(FieldDate, 'MM/DD') as DATEMMDD
+Resident Work_Orders
+;
+
+
+Alternative:
+vLM = 3; //the last month of the fiscal year
+Year(AddMonths(Today(), -vLM))	//Calculated fiscal year
+Month(AddMonths(Today(), -vLM))	//Calculated fiscal month
+
+/*******************Fiscal Year and Month*************************/
+
+//Deleting script variables
+LET vVariableToRemove = null();
+
+/******************Common Set Analysis expressions********************/
+//YTD (Year-To-Date) Sales:
+Sum({$<MonthID={“<=$(=Max(MonthID))”},Year={$(=Max(Year))},Quarter=,Month=>}Sales)
+
+//QTD  (Quarter-To-Date) Sales:
+Sum({$<MonthID={“<=$(=Max(MonthID))”},QuarterID={$(=Max(QuarterID))},Year=,Quarter=,Month=>}Sales)
+
+//MTD (Month-To-Date) Sales:
+Sum({$<MonthID={$(=Max(MonthID))},Year=,Quarter=,Month=>}Sales)
+
+//Previous Month Sales:
+Sum({$<MonthID={$(=Max(MonthID)–1)},Year=,Quarter=,Month=>}Sales)
+
+//Previous Quarter Sales:
+Sum({$<QuarterID={$(=Max(QuarterID)–1)},Year=,Quarter=,Month=>}Sales)
+
+//Sales for the same Month but Previous Year:
+Sum({$<MonthID={$(=Max(MonthID)–12)},Year=,Quarter=,Month=>}Sales)
+
+//Sales for same Quarter of the Previous Year:
+Sum({$<QuarterID={$(=Max(QuarterID)–4)},Year=,Quarter=,Month=>}Sales)
+
+//YTD Sales for Previous Year:
+Sum({$<MonthID={“<=$(=Max(MonthID)–12)”},Year={$(=Max(Year)–1)},Quarter=,Month=>}Sales)
+
+//Sales for Rolling 12 Months:
+Sum({$<MonthID={“>=$(=Max(MonthID)–11)<=$(=Max(MonthID))”},Year=,Quarter=,Month=>} Sales)
+
+/******************Common Set Analysis expressions********************/
+
+/******************LVTS Participant Collateral Daily % Formula********************/
+//Daily% in Version 0.5
+if(GetSelectedCount([Client Name])=1,
+Sum({$<[Report Date]={">=$(vStartDate)<=$(vEndDate)"}>}[Settled BoC Value Amount])/Only({$<[Report Date]={">=$(vStartDate)<=$(vEndDate)"}>}SumOfClientDailyAmount),
+Sum({$<[Report Date]={">=$(vStartDate)<=$(vEndDate)"}>}[Settled BoC Value Amount])
+/
+if(Isnull(aggr(sum({$<[Report Date]={">=$(vStartDate)<=$(vEndDate)"}>}[Settled BoC Value Amount]),[Report Date])),
+top(aggr(sum({$<[Report Date]={">=$(vStartDate)<=$(vEndDate)"}>}[Settled BoC Value Amount]),[Report Date])),
+aggr(sum({$<[Report Date]={">=$(vStartDate)<=$(vEndDate)"}>}[Settled BoC Value Amount]),[Report Date])))
+
+//Sheet Title
+=if(GetSelectedCount([Client Name])=0,'Charts & Data for All Clients (Please select a Client Name for Details)', 'Charts & Data for '&GetFieldSelections([Client Name]))
+/******************LVTS Participant Collateral Daily % Formula********************/
+
+/******************Recipe for a Pareto Analysis********************/
+//Expression: Pareto Class
+If(RangeSum(Above(Sum(Sales),1,RowNo()))/Sum(total Sales)<=0.8,'A',
+If(RangeSum(Above(Sum(Sales),1,RowNo()))/Sum(total Sales)<=0.9,'B','C'))
+
+//In Qlik Sense
+=Aggr(If(Rangesum(Above(Sum({1} Sales)/Sum({1} total Sales),1,RowNo()))<0.8,'A',
+		If(Rangesum(Above(Sum({1} Sales)/Sum({1} total Sales),1,RowNo()))<0.9,'B','C')),
+			(Product,(=Sum({1} Sales),Desc)))
+
+//Exclusive accumulated relative sales (lower bound):
+=Min(Aggr(Rangesum(Above(Sum({1} Sales)/Sum({1} total Sales),1,RowNo())),(Product,(=Sum({1} Sales),Desc))))
+
+//Inclusive accumulated relative sales (upper bound):
+=Max(Aggr(Rangesum(Above(Sum({1} Sales)/Sum({1} total Sales),0,RowNo())),(Product,(=Sum({1} Sales),Desc))))
+
+/******************Recipe for a Pareto Analysis********************/
+
+/******************Recipe for an ABC Analysis********************/
+If((Rank(Sum(Sales),1)-1)/Count(distinct total Product)<0.50,RGB(140,170,200),
+If((Rank(Sum(Sales),1)-1)/Count(distinct total Product)<0.75,RGB(255,200,0),LightRed()))
+
+Aggr(If((Rank(Sum(Sales),1)-1)/Count(distinct total Product)<0.50,'A',
+		If((Rank(Sum(Sales),1)-1)/Count(distinct total Product)<0.75,'B','C')),
+			Product)
+
+If((Rank(Sum(Sales),1)-1)/Count(distinct total <Customer> Product)<0.50,RGB(140,170,200),
+	If((Rank(Sum(Sales),1)-1)/Count(distinct total <Customer> Product)<0.75,RGB(255,200,0),LightRed()))
+
+If((HRank(Sum(Sales),1)-1)/Count(distinct total <Product> Customer)<0.50,RGB(140,170,200),
+	If((HRank(Sum(Sales),1)-1)/Count(distinct total <Product> Customer)<0.75,RGB(255,200,0),LightRed()))
+
+/******************Recipe for an ABC Analysis********************/
+
+
+Single quotes	chr(39)
+Double quotes	chr(34)
+Square brackets	chr(91)chr(93)
+Grave accents	chr(96)
+
+/******************Easy Incremental Load********************/
+// vLastLoadTime holds the last date of loading qliktips
+// If it is not set, then set it to 1,000 days ago
+If Len('$(vLastLoadTime)')=0 Then
+ Let vLastLoadTime=Num(Now()-1000);
+End If
+
+// vLoadTime holds the current run time
+Let vLoadTime=Num(Now());
+
+// Load the data from the data source
+// between the two dates
+Data:
+LOAD @1:23 as DateTime,
+     @24:n as Value
+FROM
+[..\Data Files\TXTs\Data.txt]
+(fix, codepage is 1252)
+Where @1:23>$(vLastLoadTime)
+And @1:23<=$(vLoadTime);
+
+// If there were any rows,
+// concatenate the QVD rows and re-Store
+If NoOfRows('Data') > 0 Then
+
+// Get the length of the QVD file
+ Let vFileLen=FileSize('Data.qvd');
+
+// If the file exists, load it
+ if Len('$(vFileLen)')>0 Then
+
+  Concatenate (Data)
+  Load
+   DateTime,
+   Value
+  From [Data.qvd] (qvd);
+
+ End if
+
+// Store the full table back to QVD
+ Store Data into [Data.qvd];
+
+// We can drop the table
+ Drop Table Data;
+
+End if
+
+Let vLastLoadTime=vLoadTime;
+
+// Load the data from the QVD
+Data:
+Load
+ DateTime,
+ Value
+From [Data.qvd] (qvd);
+/******************Easy Incremental Load********************/
+
+//Excluding X but not NULL in Set Analysis
+Sum({1<ID=E({$<Field={X}>}ID)>}Amount)
+
+//To add zero to all vlaues, also for the excluded dimensional values
+Sum(Sales)+Sum({1}0)
+
+
+Only(Aggr(Above(Sum({1} Sales)), YearMonth))
+Only(Aggr(RangeAvg(Above(Sum({1} Sales),0,12)), YearMonth))
+
+/******************The Nature of Dual Flags
+//YesNoFlag
+YesNoMap:
+Mapping Load num, dual(str,num) Inline
+[
+num, str
+0, No
+1, Yes
+]
+;
+
+MAP Shipped USING YesNoMap;
+MAP Audited USING YesNoMap;
+
+//create the flag fields using the simple 0/1 assignments
+If(Not IsNull(ShipDate),1,0) as Shipped
+
+The Nature of Dual Flags********************/
+
+
+/******************Year-over-Year Comparisons
+If(DayNumberOfYear(Date)<=DayNumberOfYear(Today()),1,0) as IsInYTD,
+If(DayNumberOfQuarter(Date)<=DayNumberOfQuarter(Today()),1,0) as IsInQTD,
+If(Day(Date)<=Day(Today()),1,0) as IsInMTD,
+If(Month(Date)=Month(Today()),1,0) as IsCurrentMonth,
+If(Month(AddMonths(Date,1))=Month(Today()),1,0) as IsLastMonth,
+
+Year-over-Year Comparisons*********************/
+
+/******************AutoGenerate Date Range
+//Generate table of the dates we want 2001-2004
+LET vStartDate = num(MakeDate(2001,1,1)-1);
+LET vEndDate = num(MakeDate(2004,12,31));
+
+DateMaster:
+Load date($(vStartDate) + IterNo()) as aDate
+Autogenerate 1
+While $(vStartDate) + IterNo() <= $(vEndDate);
+
+//Optimized load of the subset dates
+tdata:
+Load * From qvdData.qvd(qvd)
+Where Exists(aDate);
+
+Drop Table DateMaster;
+
+AutoGenerate Date Range*********************/
+
+
+/******************Loading Multiple Sheets
+FOR i = 0 to NoOfRows(‘tables’)-1
+	LET sheetName = purgeChar(peek(‘TABLE_NAME’, i, ‘tables’), chr(39));
+	Sales:
+	LOAD *
+	FROM workbook.xls (biff, embedded labels, table is [$(sheetName)]);
+NEXT
+
+Loading Multiple Sheets********************/
+
+
+/******************accumuated sum
+Rangsum(above(sum(),0, rowno()))
+
+Sum({1<ReportYearMonthNum={"$(vCYM)"}>}total mvalue)
+
+Sum({1<ReportYearMonthNum={"$(vCYM)"}>}mvalue)
+
+Rangesum(above(Sum({1<ReportYearMonthNum={"$(vCYM)"}>}mvalue),0, rowno()))
+
+=Num(Rangesum(above(Sum({1<ReportYearMonthNum={"$(vCYM)"}>}mvalue),0, rowno()))/Sum({1<ReportYearMonthNum={"$(vCYM)"}>}total mvalue),'#,##0%')
+
+accumuated sum*********************/
+
+/******************Using MapSubString()
+ReplaceMap:
+MAPPING LOAD * INLINE [
+char|replace
+(|
+)|
+“|
+”|
+,|
+/|
+-|
+] (delimiter is '|')
+;
+
+TestData:
+LOAD
+	  *
+	, MapSubString('ReplaceMap', data) as ReplacedString
+;
+LOAD * INLINE [
+data
+(415)555-1234
+(415)543,4321
+“510”123-4567
+/925/999/4567
+] (delimiter is '|')
+;
+
+PurgeMap:
+Mapping Load * Inline
+[
+char|replace
+(|
+)|
+"|
+'|
+/|
+-|
+](delimiter is '|')
+;
+
+MapSubString('PurgeMap', Data) as PurgedData
+
+Using MapSubString()*********************/
+
+
+/******************Custom color by measures
+Colormix1((Sum({1<ReportYearMonthNum={"$(vCYM)"}>}mvalue)-$(=min(aggr( Sum({1<ReportYearMonthNum={"$(vCYM)"}>}mvalue), Term))))/$(=(max(aggr( Sum({1<ReportYearMonthNum={"$(vCYM)"}>}mvalue), Term))-min(aggr( Sum({1<ReportYearMonthNum={"$(vCYM)"}>}mvalue), Term)))),white(),RGB(0,0,128))
+Custom color by measures*********************/
+
+http://j-laoraapp5.bank-banque-canada.ca:7008/DacsAccessPoint/accessPoint?app=getfamedata&ticket=guest;default;1570731795397&cmd=get_objects&object=vintage'SUB104_34137070&outformat=CSV
+
+
+/*******************Generic Load
+Flags:
+GENERIC LOAD Order, 'Status_'&Status, 1
+Resident OrderTable;
+
+
+FOR i = NoOfTables()-1 to 0 STEP -1
+  LET vTable=TableName($(i));
+  IF WildMatch('$(vTable)', 'Flags.*') THEN
+    LEFT JOIN (OrdersTable) LOAD * RESIDENT    [$(vTable)];
+    DROP TABLE  [$(vTable)];
+  ENDIF
+NEXT i
+
+Generic Load*******************/
+
+
+/******************Condition Control Load Flow
+LET vQVDDate = MakeDate(2019,10,30);
+//LET vQVDDate = Today();
+LET vQVDEndOfMonth = MonthEnd(Today());
+
+IF $(vQVDDate) = $(vQVDEndOfMonth) THEN
+	LOAD
+      "upper(int_le.long_name)",
+      data_date,
+      isin,
+      deal_tracking_num,
+      internal_portfolio,
+      ins_name,
+      ins_num,
+      account_name,
+      cdx_acct,
+      issuer,
+      issuer_class,
+      settle_date,
+      maturity_date,
+      fx_flt,
+      float_rate,
+      mvalue
+	FROM [lib://FBD_STAGE (bocad_huap)/Holdings.qvd](qvd)
+    ;
+ELSE
+	EXIT Script
+    ;
+END IF
+
+
+Condition Control Load Flow********************/
+
+/****************Generating Missing Rate
+LIB CONNECT TO 'FMBO_DWH_ZHUF (bocad_zhuf)';
+
+Temp_Table_Rates:
+Load
+	  Date(Floor(RUN_DATE_ID),'YYYY.MM.DD') as [Report Date]
+    , RATE
+;
+select RUN_DATE_ID,result as RATE
+from FINDDW.USER_GEN_FX_RESULT_FACT
+where CURRENCY_SKEY=6
+;
+
+MinMaxDate:
+Load
+	  Min([Report Date]) as MinDate
+    , Max([Report Date]) as MaxDate
+Resident Temp_Table_Rates
+;
+
+LET vMinDate = Peek('MinDate',-1,'MinMaxDate')-1;
+LET vMaxDate = Peek('MaxDate',-1,'MinMaxDate');
+
+Drop Table MinMaxDate;
+
+Join (Temp_Table_Rates)
+Load Date(RecNo()+$(vMinDate)) as [Report Date]
+AutoGenerate vMaxDate - vMinDate
+;
+
+Rates:
+NoConcatenate
+Load
+	  Date(Num([Report Date])+1,'YYYY.MM.DD') as D2
+    , If(IsNull(RATE),Peek(RATE),RATE) as RATE
+    , if(Num([Report Date])=Num(Floor(QuarterEnd([Report Date]))),1,0) as Flag
+Resident Temp_Table_Rates
+Order by [Report Date]
+;
+
+Drop Table Temp_Table_Rates;
+
+Join(Rates)
+
+COFER:
+load
+	  Date(Date#([INDEX],'YYYY-MM-DD'),'YYYY.MM.DD') as D2
+    , C010FRAC@IFS
+;
+LOAD
+      "INDEX"
+    , C010FRAC@IFS
+FROM [lib://FBD_STAGE (bocad_huap)/COFER.qvd](qvd)
+;
+
+
+Generating Missing Rate**********************/
+
+/****************ISIN TERM
+LIB CONNECT TO 'FMBO_DWH_ZHUF (bocad_zhuf)';
+
+Map_RRB:
+Mapping Load * Inline
+[
+ISIN,RRB
+CA135087VS05,1
+CA135087WV25,1
+CA135087XQ21,1
+CA135087YK42,1
+CA135087ZH04,1
+CA135087B949,1
+CA135087G997,1
+]
+;
+
+
+ISIN_Term:
+Load
+	  ISIN
+    , If(RRB_Flag=1,'30Y (RRB)', Temp_Term) as Term
+;
+Load
+	  *
+    , If(DaysDiff >= 18250, dual('50Y',50),
+    	If(DaysDiff >= 10950, dual('30Y',30),
+        	If(DaysDiff >= 3650, dual('10Y',10),
+            	If(DaysDiff >= 1825, dual('5Y',5),
+                	If(DaysDiff >= 1095, dual('3Y',3),
+                    	If(DaysDiff >= 730, dual('2Y',2), Null())))))) as Temp_Term
+Where [Maturity Date] >= Today()
+;
+Load
+	  *
+    , Num([Start Date]) as StartDateNum
+    , Num([Maturity Date]) as MaturityDateNum
+    , [Maturity Date]-[Start Date] as DaysDiff
+;
+Load
+	  ISIN
+    , ApplyMap('Map_RRB',ISIN,0) as RRB_Flag
+    , Date(StartDate) as [Start Date]
+    , Date(MaturityDate) as [Maturity Date]
+;
+SQL
+SELECT DISTINCT
+      i.ISIN
+    , Min(a.START_DATE_ID) "StartDate"
+    , Max(a.MATURITY_DATE_ID) "MaturityDate"
+FROM FINDDW.INSTRUMENT_DIM i,
+FINDDW.AB_TRAN_FACT a
+WHERE a.INSTRUMENT_SKEY = i.INSTRUMENT_SKEY
+AND ISIN LIKE 'CA135087%'
+GROUP BY i.ISIN
+;
+
+/*
+SELECT DISTINCT
+      i.ISIN
+    , a.START_DATE_ID "StartDate"
+    , a.TRADE_DATE_ID "TradeDate"
+    , a.SETTLE_DATE_ID "SettleDate"
+    , a.MATURITY_DATE_ID "MaturityDate"
+FROM FINDDW.INSTRUMENT_DIM i,
+FINDDW.AB_TRAN_FACT a
+WHERE a.INSTRUMENT_SKEY = i.INSTRUMENT_SKEY
+AND ISIN LIKE 'CA135087F338'
+--GROUP BY i.ISIN
+*/
+
+ISIN TERM**********************/
+
+/****************STK ANALYTIC
+
+SET vNum = Num($1,'#,##0.00');
+SET v%Num = Num($1,'#,##0.0%');
+SET vMinDate = '=Num(Min(Date))';
+SET vMaxDate = '=Num(Max(Date))';
+
+Load
+	*
+    , Date(Date,'MMM D,YY')&'('&WeekDay&')' as DateWeekDay
+;
+Load
+	  *
+    , 'NFLX' as Stk
+    , Year(Date) as ReportYear
+    , Date(MonthStart(Date),'MMM-YYYY') as ReportYearMonth
+    , Year(Date)&'-'&Week(Date) as ReportWeek
+    , Num(Date) as DateNum
+    , If(Open<Close, Dual('Up',1), Dual('Dn',-1)) as UpDnFlag
+    , WeekDay(Date) as WeekDay
+    , $(vNum((Open-Close)*-1)) as OpenCloseDiff
+    , $(v%Num((Open-Close)/Open)) as OpenCloseDiff%
+    , $(vNum(High-Low)) as HighLowDiff
+    , $(v%Num((High-Low)/High)) as HighLowDiff%
+;
+LOAD
+      Date
+    , $(vNum(Open)) as Open
+    , $(vNum(High)) as High
+    , $(vNum(Low)) as Low
+    , $(vNum(Close)) as Close
+    , $(vNum([Adj Close])) as [Adj Close]
+    , Volume
+FROM [lib://AttachedFiles/NFLX.csv]
+(txt, codepage is 28591, embedded labels, delimiter is ',', msq);
+
+STK ANALYTIC**********************/
+
+/****************Filling Default Value
+YNMap:
+MAPPING LOAD
+null(), ‘N’ AutoGenerate 1;
+
+
+MissingMap:
+MAPPING LOAD
+null(), ‘MISSING!’ AutoGenerate 1;
+
+MAP Shipped USING YNMap;
+MAP BackOrdered USING YNMap;
+MAP ProductDesc USING MissingMap;
+
+Orders2:
+NoConcatenate   // This is important! We want a new table!
+LOAD * RESIDENT Orders;
+DROP TABLE Orders;  // Drop the original table
+
+Filling Default Value*****************/
+
+/****************Pyjamas strips in table
+=if(Mod(RowNo(Total),2)=0,'lightblue')
+Pyjamas strips in table*****************/
+
+/****************Call Web Service to retrieve Famemart Data
+//SET vSourceData = 'lib://FBD_STAGE (bocad_huap)/';
+SET vSourceData = 'lib://AttachedFiles/';
+
+FirstStep:
+LOAD td
+FROM [lib://FameProdConnectionFirstStep (bocad_zhuf)]
+(XmlSimple, table is [html/table/tr])
+;
+
+LET vTicket = Peek('td',-1,'FirstStep');
+
+SUB GetFameData(_field)
+	FameData:
+    LOAD *
+    FROM [lib://FameProdConnection (bocad_zhuf)]
+	(URL is [http://laoraapp5.bank-banque-canada.ca:7008/DacsAccessPoint/accessPoint?app=getfamedata&ticket=$(vTicket)&cmd=get_objects&object=famemart'$(_field)@IFS&outformat=CSV]
+	,txt, codepage is 28591, embedded labels, delimiter is ',', msq)
+	;
+END SUB
+
+SUB GetFameOtherData(_field)
+	Join (FameData)
+	[$(_field)]:
+    LOAD *
+    FROM [lib://FameProdConnection (bocad_zhuf)]
+	(URL is [http://laoraapp5.bank-banque-canada.ca:7008/DacsAccessPoint/accessPoint?app=getfamedata&ticket=$(vTicket)&cmd=get_objects&object=famemart'$(_field)@IFS&outformat=CSV]
+	,txt, codepage is 28591, embedded labels, delimiter is ',', msq)
+	;
+END SUB
+
+CALL GetFameData('C010FRA')
+CALL GetFameOtherData('C010FRAC')
+CALL GetFameOtherData('C010FRU')
+CALL GetFameOtherData('C010FRAD')
+CALL GetFameOtherData('C010FRAY')
+CALL GetFameOtherData('C010FRAP')
+CALL GetFameOtherData('C010FRAE')
+CALL GetFameOtherData('C010FRAR')
+CALL GetFameOtherData('C010FRAW')
+CALL GetFameOtherData('C010FRAA')
+CALL GetFameOtherData('C010FRAO')
+
+STORE FameData INTO [$(vSourceData)COFER.qvd](qvd);
+
+Drop Table FirstStep;
+
+Call Web Service to retrieve Famemart Data*****************/
+
+/****************How to choose an expression
+if(CurrencyType='USD' AND [Include VAT?]='N'
+ ,Sum(SalesAmount_USD)
+,if(CurrencyType='USD' AND [Include VAT?]='Y'
+ ,Sum(SalesAmount_USD + VAT_USD)
+,if(CurrencyType='LC' AND [Include VAT?]='N'
+ ,Sum(SalesAmount_LC)
+,if(CurrencyType='LC' AND [Include VAT?]='Y'
+ ,Sum(SalesAmount_LC + VAT_LC)
+))))
+How to choose an expression*****************/
+
+//Updated on Dec. 24, 2019
