@@ -1,0 +1,96 @@
+//Cumulative_Values_In_The_Scripts_Using_Peek
+Target:
+NoConcatenate
+Load
+	  Num(Date) as DateNum
+    , Dimension
+    , Value
+	, Date
+    , If(RowNo()=1
+    	, Value										//First Record, Just Use Value
+    	, If(Dimension=Peek(Dimension)
+    		, Value + Peek(CumulativeValue)			//Same Dimension, Add Value to Cumulative Value
+        	, Value									//Dimension Changed, Just Use Value
+       		)
+       )											as CumulativeValue
+Resident DataSource
+Order by Dimension, Date
+;
+
+DROP TABLE DataSource;
+
+
+
+/////////////////////////////////////
+//ApplyMap() multiple fields
+Mapping_Table:
+Mapping Load
+   Field1
+  ,Field2&'|'&Field3&'|'&Field4 as Field5
+FROM ...
+
+FACT:
+Load
+   Field1
+  ,Subfield(ApplyMap('Mapping_Table',Field1),'|',1) as Field2
+  ,Subfield(ApplyMap('Mapping_Table',Field1),'|',2) as Field3
+  ,Subfield(ApplyMap('Mapping_Table',Field1),'|',3) as Field4
+  ...
+
+
+
+
+/////////////////////////////////////////
+//Approach_1, in loading scripts
+Load *
+	,Pick(WildMatch(Description,'*pri*')+1,'OK','Prioritize') as NewField
+
+Inline
+[
+ID, Description
+1, Need computer fixed ASAP.
+2, Monitor broken - top priority!!
+3, First priority needs to be fixing.
+4, No rush on this, just whenever you have a time.
+5, Not a priority.
+6, Please fix my hard drive.
+7, Spilled coffee on my laptop.
+]
+;
+
+//Approach_2, in UI chart
+//Same results, but Approach_2, User cannot make a selection of NewField
+
+////////////////////////////////////////////////
+//Set Analysis: Sales for This Week
+sum({$<Year={$(=Year(Max(Date)))},Week={$(=Week(Max(Date)))}>}Sales)
+
+//Set Analysis: Sales for Last 7 days
+sum({$<Date={"<=$(=Max(Date))>=$(=Max(Date)-7)"}>}Sales)
+
+
+/////////////////////////////////////////////////
+//Load_Each_Spreadsheet_Stored_Into_QVD
+ODBC CONNECT32 TO [Excel Files;DBQ=C:\User\zf328\Desktop\FOR EACH STORE QVD.xlsx];
+
+LET vTgtPath = 'C:\User\zf328\Desktop\QVD\';
+
+exceltables:
+SQLTABLES;
+DISCONNECT;
+
+FOR i=0 TO NOOFROWS('exceltables')-1
+
+    LET vExcelSheets = purgechar(purgechar(peek('TABLE_NAME', i, 'exceltables'),chr(36)),chr(39));
+
+    NoConcatenate
+
+    LOAD
+        Date,
+        Amount
+    FROM
+        [C:\Users\zf328\Desktop\FOR EACH STORE QVD.xlsx](ooxml, embedded labels, table is [$(vExcelSheets)]);
+
+    STORE [$(vExcelSheets)] INTO $(vTgtPath)$(vExcelSheets).QVD(QVD);
+
+NEXT i
